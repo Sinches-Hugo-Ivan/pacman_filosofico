@@ -203,7 +203,7 @@ function playTone(freq, type, duration, vol, startTime) {
     osc.start(t); osc.stop(t + duration + 0.01);
 }
 
-function playWaka() { playTone(200 + Math.random()*100, 'triangle', 0.08, 0.03); }
+function playWaka() { playTone(800 + Math.random()*100, 'triangle', 0.08, 0.03); }
 function playWinSound() { [523,659,783,1046].forEach((f,i) => setTimeout(() => playTone(f,'square',0.5,0.08), i*150)); }
 function playDeathSound() { [400,300,200,100].forEach((f,i) => setTimeout(() => playTone(f,'sawtooth',0.5,0.08), i*150)); }
 function playPowerUp() { playTone(880,'square',0.2,0.1); setTimeout(()=>playTone(1100,'square',0.3,0.1),100); }
@@ -426,9 +426,9 @@ const levels = [
             [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
             [1,0,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,1,1,0,1],
             [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
-            [1,0,1,1,1,1,1,1,1,0,6,0,1,1,1,1,1,1,1,0,1],
+            [1,1,1,0,1,1,1,1,1,0,0,0,1,1,1,1,1,0,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,0,1],
             [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
             [1,1,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,1,1],
             [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
@@ -438,10 +438,11 @@ const levels = [
             [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
             [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
         ]
+
     },
     {
         title:"NIVEL 4: DETERMINISMO MATERIALISTA",
-        desc:"Oro (💰) para inmunidad y Rayos (⚡) para velocidad. Los recursos están repartidos. ¡Llega a la meta!",
+        desc:"Oro (💰) para tener inmunidad por un tiempito y Rayos (⚡) para tener velocidad. Los recursos están repartidos. ¡Llega a la meta!",
         startX:1,startY:1,chase:true,ghostCount:4,
         map:[
             [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
