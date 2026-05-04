@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>    
+    <meta charset="UTF-8">    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pac-Man Filosófico</title>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            background-color: #1a1a1a; color: #eee;
+            font-family: 'Segoe UI', sans-serif;
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh; min-height: -webkit-fill-available;
+            margin: 0; padding: 0;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none; -webkit-user-select: none;
+        }
+        #ui-top {
+            width: 100%; padding: 4px 10px;
+            text-align: center; background: #111;
+            border-bottom: 2px solid #333;
+            flex-shrink: 0;
+        }
+        #level-name { margin: 2px 0; font-size: clamp(12px, 3.5vw, 18px); color: #f0db4f; }
+        #status-bar { font-size: clamp(10px, 2.5vw, 13px); color: #aaa; margin-bottom: 2px; }
+
+        #game-container {
+            position: relative;
+            border: 3px solid #555;
+            background-color: #000;
+            box-shadow: 0 0 30px #000;
+            flex-shrink: 0;
+            touch-action: none;
+        }
+        canvas { display: block; }
+
+        /* OVERLAY */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.96);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: flex-start;
+            text-align: center;
+            padding: 12px 16px 12px;
+            box-sizing: border-box; z-index: 10;
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
+        }
+        #overlay h2 {
+            color: #f0db4f; margin: 6px 0 6px;
+            font-size: clamp(13px, 4vw, 22px);
+        }
+        #overlay p {
+            line-height: 1.5; font-size: clamp(11px, 3vw, 15px);
+            max-width: 95%; color: #ccc; margin: 4px 0;
+        }
+        #credits-text { font-size: clamp(11px, 2.8vw, 15px); color: #f0db4f; margin-top: 6px; letter-spacing: 1px; }
+        button {
+            background: #f0db4f; color: #000; border: none;
+            padding: clamp(10px, 2.5vw, 15px) clamp(24px, 8vw, 40px);
+            font-size: clamp(16px, 4.5vw, 22px);
+            font-weight: bold; cursor: pointer; margin-top: 12px;
+            border-radius: 50px; transition: 0.2s;
+            -webkit-appearance: none;
+            appearance: none;
+            min-width: 160px;
+        }
+        button:active { transform: scale(0.95); background: #fff; }
+
+        /* CONTROLES TÁCTILES */
+        #controls-area {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            padding: 6px 0 4px;
+        }
+
+        /* DPAD */
+        #dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 4px;
+            width: 150px; height: 150px;
+        }
+        .dpad-btn {
+            background: rgba(240, 219, 79, 0.15);
+            border: 2px solid rgba(240, 219, 79, 0.4);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+            cursor: pointer;
+            transition: background 0.1s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .dpad-btn:active, .dpad-btn.pressed {
+            background: rgba(240, 219, 79, 0.5);
+        }
+        .dpad-center {
+            background: rgba(255,255,255,0.04);
+            border-color: transparent;
+            font-size: 14px; color: #555;
+        }
+        .dpad-empty { visibility: hidden; }
+
+        /* JOYSTICK (alternativo, se muestra si el usuario prefiere) */
+        #joystick-wrapper {
+            width: 130px; height: 130px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+            position: relative;
+            touch-action: none;
+            border: 2px solid #444;
+            display: none; /* oculto por defecto, se activa con toggle */
+        }
+        #joystick-knob {
+            width: 52px; height: 52px; background: #f0db4f;
+            border-radius: 50%; position: absolute;
+            top: 39px; left: 39px;
+            box-shadow: 0 0 10px rgba(240,219,79,0.5);
+            pointer-events: none;
+        }
+
+        /* ORIENTACIÓN */
+        #rotate-hint {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; z-index: 100;
+            flex-direction: column; align-items: center; justify-content: center;
+            font-size: 20px; text-align: center; padding: 20px;
+        }
+        #rotate-hint span { font-size: 60px; margin-bottom: 16px; display: block; }
+
+        /* LANDSCAPE: reorganizamos el layout */
+        @media (orientation: landscape) and (max-height: 500px) {
+            body { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+            #ui-top { width: 100%; padding: 2px 10px; }
+            #game-wrapper { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+            #controls-area { flex-direction: column; width: auto; padding: 0 8px; }
+            #dpad { width: 120px; height: 120px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="rotate-hint">
+    <span>📱</span>
+    Mejor en modo horizontal.<br>Rotá el dispositivo o seguí en vertical.
+</div>
+
+<div id="ui-top">
+    <h1 id="level-name" style="margin:2px 0;">Nivel 1</h1>
+    <div id="status-bar">Usá el D-Pad o deslizá en el mapa</div>
+</div>
+
+<div id="game-wrapper" style="display:flex;flex-direction:row;align-items:center;gap:8px;width:100%;justify-content:center;">
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="overlay">
+            <h2 id="title">PAC-MAN FILOSÓFICO</h2>
+            <p id="desc">Cargando...</p>
+            <p id="credits-text"></p>
+            <button id="btn" onclick="handleButtonClick()">EMPEZAR</button>
+        </div>
+    </div>
+
+    <!-- D-Pad lateral en landscape -->
+    <div id="dpad-side" style="display:none;">
+        <div id="dpad2"><!-- se clona por JS --></div>
+    </div>
+</div>
+
+<div id="controls-area">
+    <div id="dpad">
+        <div class="dpad-empty"></div>
+        <div class="dpad-btn" id="btn-up">▲</div>
+        <div class="dpad-empty"></div>
+        <div class="dpad-btn" id="btn-left">◀</div>
+        <div class="dpad-btn dpad-center">●</div>
+        <div class="dpad-btn" id="btn-right">▶</div>
+        <div class="dpad-empty"></div>
+        <div class="dpad-btn" id="btn-down">▼</div>
+        <div class="dpad-empty"></div>
+    </div>
+</div>
+
+<script>
+// ─── AUDIO ────────────────────────────────────────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function midiNoteToHz(note) { return 440 * Math.pow(2, (note - 69) / 12); }
+
+function playTone(freq, type, duration, vol, startTime) {
+    const t = startTime !== undefined ? startTime : audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + duration + 0.01);
+}
+
+function playWaka() { playTone(200 + Math.random()*100, 'triangle', 0.08, 0.03); }
+function playWinSound() { [523,659,783,1046].forEach((f,i) => setTimeout(() => playTone(f,'square',0.5,0.08), i*150)); }
+function playDeathSound() { [400,300,200,100].forEach((f,i) => setTimeout(() => playTone(f,'sawtooth',0.5,0.08), i*150)); }
+function playPowerUp() { playTone(880,'square',0.2,0.1); setTimeout(()=>playTone(1100,'square',0.3,0.1),100); }
+function playPacmanIntro() {
+    const melody = [[493,0.1],[987,0.1],[740,0.1],[622,0.1],[987,0.05],[740,0.15],[622,0.2]];
+    let t = audioCtx.currentTime;
+    melody.forEach(([f,d]) => { playTone(f,'square',d,0.05,t); t+=d; });
+}
+
+const MIDI_NOTES = [
+  {"note":64,"start":1.698,"dur":0.156,"vel":99,"ch":2},
+  {"note":64,"start":2.075,"dur":0.18,"vel":98,"ch":2},
+  {"note":69,"start":2.264,"dur":0.108,"vel":110,"ch":2},
+  {"note":69,"start":2.453,"dur":0.12,"vel":101,"ch":2},
+  {"note":72,"start":2.642,"dur":0.072,"vel":110,"ch":2},
+  {"note":72,"start":2.83,"dur":0.072,"vel":107,"ch":2},
+  {"note":57,"start":3.019,"dur":0.377,"vel":79,"ch":1},
+  {"note":76,"start":3.019,"dur":0.755,"vel":83,"ch":1},
+  {"note":69,"start":3.019,"dur":0.755,"vel":85,"ch":1},
+  {"note":72,"start":3.019,"dur":0.755,"vel":85,"ch":1},
+  {"note":76,"start":3.019,"dur":1.318,"vel":81,"ch":2},
+  {"note":57,"start":3.585,"dur":2.453,"vel":101,"ch":1},
+  {"note":72,"start":4.34,"dur":0.167,"vel":84,"ch":2},
+  {"note":76,"start":4.528,"dur":0.102,"vel":97,"ch":2},
+  {"note":76,"start":4.717,"dur":0.189,"vel":100,"ch":1},
+  {"note":69,"start":4.717,"dur":0.189,"vel":94,"ch":1},
+  {"note":76,"start":4.717,"dur":0.299,"vel":106,"ch":2},
+  {"note":72,"start":5.094,"dur":0.138,"vel":98,"ch":2},
+  {"note":76,"start":5.283,"dur":0.12,"vel":100,"ch":2},
+  {"note":69,"start":5.472,"dur":0.189,"vel":105,"ch":1},
+  {"note":72,"start":5.472,"dur":0.189,"vel":110,"ch":1},
+  {"note":76,"start":5.66,"dur":0.178,"vel":100,"ch":2},
+  {"note":74,"start":5.849,"dur":1.517,"vel":108,"ch":2},
+  {"note":55,"start":6.038,"dur":0.377,"vel":96,"ch":1},
+  {"note":67,"start":6.038,"dur":0.566,"vel":81,"ch":1},
+  {"note":71,"start":6.038,"dur":0.566,"vel":91,"ch":1},
+  {"note":74,"start":6.038,"dur":0.755,"vel":89,"ch":1},
+  {"note":55,"start":6.604,"dur":1.698,"vel":84,"ch":1},
+  {"note":71,"start":7.358,"dur":0.156,"vel":105,"ch":2},
+  {"note":74,"start":7.547,"dur":0.138,"vel":107,"ch":2},
+  {"note":67,"start":7.736,"dur":0.189,"vel":84,"ch":1},
+  {"note":74,"start":7.736,"dur":0.21,"vel":107,"ch":2},
+  {"note":71,"start":7.925,"dur":0.189,"vel":36,"ch":1},
+  {"note":71,"start":8.113,"dur":0.15,"vel":110,"ch":2},
+  {"note":74,"start":8.113,"dur":0.189,"vel":89,"ch":1},
+  {"note":74,"start":8.302,"dur":0.174,"vel":105,"ch":2},
+  {"note":74,"start":8.302,"dur":0.377,"vel":113,"ch":1},
+  {"note":67,"start":8.302,"dur":0.566,"vel":102,"ch":1},
+  {"note":55,"start":8.302,"dur":0.755,"vel":105,"ch":1},
+  {"note":74,"start":8.679,"dur":0.197,"vel":97,"ch":2},
+  {"note":72,"start":8.868,"dur":1.544,"vel":99,"ch":2},
+  {"note":53,"start":9.057,"dur":0.377,"vel":105,"ch":1},
+  {"note":72,"start":9.057,"dur":0.566,"vel":108,"ch":1},
+  {"note":69,"start":9.057,"dur":0.566,"vel":70,"ch":1},
+  {"note":65,"start":9.057,"dur":0.566,"vel":81,"ch":1},
+  {"note":53,"start":9.623,"dur":2.264,"vel":115,"ch":1},
+  {"note":69,"start":10.377,"dur":0.149,"vel":97,"ch":2},
+  {"note":72,"start":10.566,"dur":0.102,"vel":112,"ch":2},
+  {"note":72,"start":10.755,"dur":0.189,"vel":104,"ch":1},
+  {"note":65,"start":10.755,"dur":0.189,"vel":96,"ch":1},
+  {"note":72,"start":10.755,"dur":0.3,"vel":115,"ch":2},
+  {"note":69,"start":11.132,"dur":0.173,"vel":97,"ch":2},
+  {"note":72,"start":11.321,"dur":0.189,"vel":105,"ch":1},
+  {"note":65,"start":11.321,"dur":0.189,"vel":98,"ch":1},
+  {"note":72,"start":11.321,"dur":0.366,"vel":112,"ch":2},
+  {"note":77,"start":11.698,"dur":0.204,"vel":97,"ch":2},
+  {"note":76,"start":11.887,"dur":1.785,"vel":98,"ch":2},
+  {"note":60,"start":12.075,"dur":0.755,"vel":75,"ch":1},
+  {"note":72,"start":12.075,"dur":1.698,"vel":90,"ch":1},
+  {"note":67,"start":12.075,"dur":1.698,"vel":87,"ch":1},
+  {"note":76,"start":12.075,"dur":1.698,"vel":93,"ch":1},
+  {"note":48,"start":13.585,"dur":0.189,"vel":108,"ch":1},
+  {"note":36,"start":13.585,"dur":0.189,"vel":106,"ch":1},
+  {"note":64,"start":13.774,"dur":0.178,"vel":105,"ch":2}
+];
+
+let victoryMusicNodes = [];
+function stopVictoryMusic() {
+    victoryMusicNodes.forEach(n => { try { n.stop(); } catch(e){} });
+    victoryMusicNodes = [];
+}
+function playVictoryMidi() {
+    stopVictoryMusic();
+    const now = audioCtx.currentTime + 0.1;
+    const offset = MIDI_NOTES[0].start;
+    MIDI_NOTES.forEach(n => {
+        const freq = midiNoteToHz(n.note);
+        const t = now + (n.start - offset);
+        const dur = Math.min(n.dur, 14 - (n.start - offset));
+        if (dur <= 0) return;
+        const vol = (n.vel / 127) * (n.ch === 2 ? 0.08 : 0.05);
+        const type = n.ch === 2 ? 'sine' : 'triangle';
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(vol, t + 0.01);
+        gain.gain.setValueAtTime(vol, t + dur * 0.8);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(t); osc.stop(t + dur + 0.02);
+        victoryMusicNodes.push(osc);
+    });
+}
+
+// ─── CANVAS ADAPTATIVO ────────────────────────────────────────────────────────
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const titleUI = document.getElementById('title');
+const descUI = document.getElementById('desc');
+const creditsUI = document.getElementById('credits-text');
+const btnUI = document.getElementById('btn');
+const levelNameUI = document.getElementById('level-name');
+
+const COLS = 21, ROWS = 21;
+let TILE = 26; // se recalcula
+
+function calcTileSize() {
+    const isLandscape = window.innerWidth > window.innerHeight;
+    const uiTopH = document.getElementById('ui-top').offsetHeight || 40;
+    const controlsH = isLandscape ? 0 : (document.getElementById('controls-area').offsetHeight || 160);
+    const padding = 16;
+
+    const availW = window.innerWidth - padding;
+    const availH = window.innerHeight - uiTopH - controlsH - padding;
+
+    // En landscape el dpad va al costado: reservamos ~160px para él
+    const mapW = isLandscape ? availW - 170 : availW;
+    const mapH = availH;
+
+    const tileByW = Math.floor(mapW / COLS);
+    const tileByH = Math.floor(mapH / ROWS);
+    TILE = Math.max(10, Math.min(tileByW, tileByH, 32));
+
+    canvas.width  = TILE * COLS;
+    canvas.height = TILE * ROWS;
+}
+
+calcTileSize();
+window.addEventListener('resize', () => { calcTileSize(); });
+window.addEventListener('orientationchange', () => { setTimeout(calcTileSize, 300); });
+
+// ─── NIVELES ──────────────────────────────────────────────────────────────────
+let currentLevelIndex = 0, playing = false, gameFinished = false;
+let player = {x:1,y:1,dirX:0,dirY:0,speed:1,immune:false,powerTimer:0};
+let ghosts = [], map = [];
+
+const levels = [
+    {
+        title:"NIVEL 1: DETERMINISMO",
+        desc:"Tu camino está trazado. Al final verás dos metas abajo, pero una está bloqueada por el fantasma (⛔). El sistema decide tu ruta.",
+        startX:1,startY:1,
+        map:[
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+            [1,1,1,0,1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,1,1],
+            [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,1],
+            [1,0,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,0,1],
+            [1,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1],
+            [1,0,1,0,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1],
+            [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+            [1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
+            [1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,1,0,0,0,1,0,1,0,0,0,0,0,0,0,1,0,1],
+            [1,1,1,0,1,0,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+            [1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+            [1,0,1,0,1,1,1,1,1,0,1,1,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+            [1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1],
+            [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ],
+        ghosts:[{x:18,y:19,type:'static'}]
+    },
+    {
+        title:"NIVEL 2: LIBRE ALBEDRÍO",
+        desc:"Inicias en el centro superior. El laberinto tiene accesos repartidos en la parte baja para que elijas libremente tu salida. ¿Realmente elegiste?",
+        startX:10,startY:1,
+        map:[
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,0,1],
+            [1,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
+            [1,0,1,0,1,1,1,0,1,0,1,0,1,0,1,1,1,0,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,1,0,1],
+            [1,0,1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1,0,1],
+            [1,1,1,0,1,1,1,0,1,1,0,1,1,0,1,1,1,0,1,1,1],
+            [1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,0,1],
+            [1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+            [1,0,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+            [1,1,1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1],
+            [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ]
+    },
+    {
+        title:"NIVEL 3: DETERMINISMO RELIGIOSO",
+        desc:"Fantasmas inteligentes te acechan. Encuentra la Cruz (✝️) para liberarte de su juicio.",
+        startX:1,startY:1,chase:true,ghostCount:3,
+        map:[
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1],
+            [1,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1],
+            [1,0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+            [1,1,1,0,1,0,1,1,1,1,0,1,1,1,1,0,1,0,1,1,1],
+            [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+            [1,0,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,0,6,0,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+            [1,0,1,1,1,0,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ]
+    },
+    {
+        title:"NIVEL 4: DETERMINISMO MATERIALISTA",
+        desc:"Oro (💰) para inmunidad y Rayos (⚡) para velocidad. Los recursos están repartidos. ¡Llega a la meta!",
+        startX:1,startY:1,chase:true,ghostCount:4,
+        map:[
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,1],
+            [1,0,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1],
+            [1,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1],
+            [1,0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,1,0,0,0,0,0,5,0,0,0,0,0,1,0,0,0,1],
+            [1,1,1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1],
+            [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,0,1],
+            [1,0,4,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,0,1,0,5,0,1,0,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1],
+            [1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ]
+    }
+];
+
+function setupLevel(idx) {
+    stopVictoryMusic();
+    const data = levels[idx];
+    currentLevelIndex = idx;
+    gameFinished = false;
+    levelNameUI.innerText = data.title;
+    titleUI.innerText = data.title;
+    descUI.innerText = data.desc;
+    creditsUI.innerText = '';
+    map = data.map.map(r => [...r]);
+    player.x = data.startX; player.y = data.startY;
+    player.dirX = 0; player.dirY = 0;
+    player.speed = 1; player.immune = false; player.powerTimer = 0;
+    ghosts = [];
+    if(data.ghosts) data.ghosts.forEach(g => ghosts.push({...g}));
+    if(data.chase) {
+        const pos = [{x:19,y:1},{x:1,y:17},{x:19,y:17},{x:10,y:15}];
+        for(let i=0;i<data.ghostCount;i++)
+            ghosts.push({x:pos[i].x,y:pos[i].y,type:'chase',timer:0,color:`hsl(${i*60},100%,70%)`});
+    }
+    playing = false;
+    overlay.style.display = "flex";
+    if(audioCtx.state === 'running') playPacmanIntro();
+}
+
+function showFinalScreen() {
+    titleUI.innerText = "✨ CONCIENCIA ALCANZADA ✨";
+    descUI.innerText = "Has superado todos los determinismos. El camino fue tuyo... ¿o no?";
+    creditsUI.innerText = "Los Caminos de la Vida  ♪  ♪  ♪  ♪";
+    btnUI.innerText = "REINICIAR TODO";
+    gameFinished = true;
+    playing = false;
+    overlay.style.display = "flex";
+    playVictoryMidi();
+}
+
+function handleButtonClick() {
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    if(gameFinished) setupLevel(0);
+    else { playing = true; overlay.style.display = "none"; }
+}
+
+// ─── D-PAD TÁCTIL ─────────────────────────────────────────────────────────────
+function setDir(dx, dy) {
+    if(!playing) return;
+    player.dirX = dx; player.dirY = dy;
+}
+
+function bindDpad(prefix) {
+    const up    = document.getElementById(prefix+'up');
+    const down  = document.getElementById(prefix+'down');
+    const left  = document.getElementById(prefix+'left');
+    const right = document.getElementById(prefix+'right');
+    if(!up) return;
+
+    const bindBtn = (el, dx, dy) => {
+        el.addEventListener('touchstart', e => { e.preventDefault(); setDir(dx,dy); el.classList.add('pressed'); }, {passive:false});
+        el.addEventListener('touchend',   e => { e.preventDefault(); el.classList.remove('pressed'); }, {passive:false});
+        el.addEventListener('mousedown',  () => setDir(dx, dy));
+    };
+    bindBtn(up,    0, -1);
+    bindBtn(down,  0,  1);
+    bindBtn(left, -1,  0);
+    bindBtn(right, 1,  0);
+}
+bindDpad('btn-');
+
+// ─── SWIPE EN EL CANVAS ───────────────────────────────────────────────────────
+let swipeStartX = 0, swipeStartY = 0;
+canvas.addEventListener('touchstart', e => {
+    swipeStartX = e.touches[0].clientX;
+    swipeStartY = e.touches[0].clientY;
+}, {passive:true});
+
+canvas.addEventListener('touchend', e => {
+    if(!playing) return;
+    const dx = e.changedTouches[0].clientX - swipeStartX;
+    const dy = e.changedTouches[0].clientY - swipeStartY;
+    const minSwipe = 20;
+    if(Math.abs(dx) < minSwipe && Math.abs(dy) < minSwipe) return;
+    if(Math.abs(dx) > Math.abs(dy)) { player.dirX = dx > 0 ? 1 : -1; player.dirY = 0; }
+    else { player.dirY = dy > 0 ? 1 : -1; player.dirX = 0; }
+}, {passive:true});
+
+// ─── TECLADO (desktop) ────────────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+    if(!playing) return;
+    if(e.key==="ArrowUp")    { player.dirX=0; player.dirY=-1; e.preventDefault(); }
+    if(e.key==="ArrowDown")  { player.dirX=0; player.dirY=1;  e.preventDefault(); }
+    if(e.key==="ArrowLeft")  { player.dirX=-1; player.dirY=0; e.preventDefault(); }
+    if(e.key==="ArrowRight") { player.dirX=1;  player.dirY=0; e.preventDefault(); }
+});
+
+// ─── GAME LOOP ────────────────────────────────────────────────────────────────
+function update() {
+    if(!playing) return;
+    let nx = player.x+player.dirX, ny = player.y+player.dirY;
+    if(ny>=0&&ny<ROWS&&nx>=0&&nx<COLS&&map[ny][nx]!==1) {
+        if(!ghosts.some(g=>g.type==='static'&&g.x===nx&&g.y===ny)) {
+            if(player.x!==nx||player.y!==ny) playWaka();
+            player.x=nx; player.y=ny;
+        }
+    }
+    let tile = map[player.y][player.x];
+    if(tile===2) {
+        playWinSound();
+        if(currentLevelIndex+1<levels.length) setupLevel(currentLevelIndex+1);
+        else showFinalScreen();
+        return;
+    }
+    if(tile===4||tile===5||tile===6) {
+        playPowerUp();
+        if(tile===4){player.immune=true;player.powerTimer=90;}
+        if(tile===5){player.speed=1.8;player.powerTimer=90;}
+        if(tile===6){ghosts=ghosts.filter(g=>g.type!=='chase');}
+        map[player.y][player.x]=0;
+    }
+    if(player.powerTimer>0){player.powerTimer--;if(player.powerTimer<=0){player.immune=false;player.speed=1;}}
+    ghosts.forEach(g => {
+        if(g.type==='chase') {
+            g.timer++;
+            if(g.timer>(player.speed>1?2:3)) {
+                let dx=player.x-g.x,dy=player.y-g.y;
+                let mx=dx!==0?Math.sign(dx):0,my=dy!==0?Math.sign(dy):0;
+                if(Math.abs(dx)>Math.abs(dy)){if(map[g.y][g.x+mx]!==1)g.x+=mx;else if(map[g.y+my]&&map[g.y+my][g.x]!==1)g.y+=my;}
+                else{if(map[g.y+my]&&map[g.y+my][g.x]!==1)g.y+=my;else if(map[g.y][g.x+mx]!==1)g.x+=mx;}
+                g.timer=0;
+            }
+        }
+        if(g.x===player.x&&g.y===player.y&&!player.immune){playDeathSound();setupLevel(currentLevelIndex);}
+    });
+}
+
+const emojiFont = `${Math.max(10, TILE - 6)}px Arial`;
+
+function draw() {
+    const ef = `${Math.max(10, TILE - 6)}px Arial`;
+    ctx.fillStyle="#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) {
+        let t=map[y][x];
+        if(t===1){ctx.fillStyle="#2222bb";ctx.fillRect(x*TILE+1,y*TILE+1,TILE-2,TILE-2);}
+        else if(t===2){ctx.fillStyle="#00ff00";ctx.beginPath();ctx.arc(x*TILE+TILE/2,y*TILE+TILE/2,TILE/3,0,7);ctx.fill();}
+        else if(t===4){ctx.font=ef;ctx.fillText("💰",x*TILE+2,y*TILE+TILE-2);}
+        else if(t===5){ctx.font=ef;ctx.fillText("⚡",x*TILE+2,y*TILE+TILE-2);}
+        else if(t===6){ctx.font=ef;ctx.fillText("✝️",x*TILE+2,y*TILE+TILE-1);}
+    }
+    ghosts.forEach(g=>{
+        ctx.font=ef;
+        ctx.fillText(g.type==='static'?"⛔":"👻",g.x*TILE+1,g.y*TILE+TILE-2);
+    });
+    ctx.fillStyle=player.immune?"#0ff":(player.speed>1?"#f0f":"#ff0");
+    ctx.beginPath();
+    let mouth=Math.sin(Date.now()/100)*0.3;
+    ctx.arc(player.x*TILE+TILE/2,player.y*TILE+TILE/2,TILE/2-2,(0.2+mouth)*Math.PI,(1.8-mouth)*Math.PI);
+    ctx.lineTo(player.x*TILE+TILE/2,player.y*TILE+TILE/2);
+    ctx.fill();
+    setTimeout(()=>{update();draw();},100);
+}
+
+setupLevel(0);
+draw();
+</script>
+</body>
+</html>
